@@ -1,5 +1,5 @@
 pipeline {
-    agent any
+    agent any
     
     // ⚠️ 환경 변수: 아래 'YOUR_...' 부분은 반드시 실제 값으로 변경하세요!
     environment {

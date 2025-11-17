@@ -1,6 +1,6 @@
 # 사용할 자바 기본 이미지를 지정합니다. Spring Boot 애플리케이션에 적합합니다.
 FROM openjdk:17-slim-bullseye as builder
-...
+
 
 # 환경 변수 설정
 ENV SPRING_PROFILES_ACTIVE=mysql \

@@ -45,30 +45,40 @@ stage('2. Build & Push to ECR') {
             }
         }
         
-        stage('3. Deploy to ECS') {
-            steps {
-                withAWS(credentials: AWS_CRED_ID, region: AWS_REGION) {
-                    script {
-                        def imageUri = "${ECR_REPO_URL}:${IMAGE_TAG}"
+      stage('3. Deploy to ECS') {
+    steps {
+        withAWS(credentials: AWS_CRED_ID, region: AWS_REGION) {
+            script {
+                // 새로 빌드된 이미지 URI (예: 556152726180.dkr.ecr.ap-northeast-2.amazonaws.com/back1:38)
+                def imageUri = "${ECR_REPO_URL}:${IMAGE_TAG}"
 
-                        def taskDefJson = sh(
-                            returnStdout: true, 
-                            script: "aws ecs describe-task-definition --task-definition ${TASK_DEF_NAME}"
-                        )
-                        def taskDef = readJSON text: taskDefJson
+                def taskDefJson = sh(
+                    returnStdout: true, 
+                    script: "aws ecs describe-task-definition --task-definition ${TASK_DEF_NAME}"
+                )
+                
+                // 🚨 기존 코드를 아래 코드로 대체하여 JSON을 정리합니다.
+                def newTaskDefJson = sh(
+                    returnStdout: true,
+                    script: """
+                        echo '${taskDefJson}' | jq -c '.taskDefinition | 
+                        del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy) | 
+                        .containerDefinitions[0].image=\"${imageUri}\"
+                        '
+                    """
+                ).trim()
 
-                        // ... (중간 JSON 처리 로직 유지)
+                // JSON 문자열을 그대로 사용하여 새로운 태스크 정의 등록
+                def newTaskDef = sh(
+                    returnStdout: true, 
+                    script: "aws ecs register-task-definition --cli-input-json '${newTaskDefJson}'"
+                )
+                def newTaskDefArn = readJSON(text: newTaskDef).taskDefinition.taskDefinitionArn
 
-                        def newTaskDef = sh(
-                            returnStdout: true, 
-                            script: "aws ecs register-task-definition --cli-input-json '${taskDef.taskDefinition.toString().replace("'", "\\'")}'"
-                        )
-                        def newTaskDefArn = readJSON(text: newTaskDef).taskDefinition.taskDefinitionArn
-
-                        sh "aws ecs update-service --cluster ${ECS_CLUSTER} --service ${ECS_SERVICE} --task-definition ${newTaskDefArn} --force-new-deployment"
-                    }
-                }
+                sh "aws ecs update-service --cluster ${ECS_CLUSTER} --service ${ECS_SERVICE} --task-definition ${newTaskDefArn} --force-new-deployment"
             }
         }
+    }
+}
     }
 }

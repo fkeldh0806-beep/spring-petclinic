@@ -27,19 +27,20 @@ pipeline {
 stage('2. Build & Push to ECR') {
             steps {
                 script {
-                    // 1. 필요한 도구 설치 (su -c로 root 권한 획득 후 설치)
-                    sh 'su -c "apt-get update && apt-get install -y docker.io awscli"'
+                    // 1. apt-get 설치 명령어는 삭제하거나 주석 처리
+                    // sh 'su -c "apt-get update && apt-get install -y docker.io awscli"' 
                     
-                    // 2. AWS ECR 인증 및 Docker Login
+                    // 2. AWS ECR 인증 및 Docker Login (su -c 제거)
                     withAWS(credentials: AWS_CRED_ID, region: AWS_REGION) {
-                        // docker login도 root 권한이 필요할 가능성이 높으므로 su -c 사용
-                        sh "su -c 'aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REPO_URL}'"
+                        // Docker와 AWS CLI가 설치되어 있어야 실행됩니다.
+                        // 이전에 실패했던 환경(docker: not found)으로 돌아갈 수 있습니다.
+                        sh "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REPO_URL}"
                     }
 
                     // 3. Docker Build, Tag, Push
-                    sh 'su -c "docker build -t petclinic-local ."'
-                    sh "su -c 'docker tag petclinic-local:latest ${ECR_REPO_URL}:${IMAGE_TAG}'"
-                    sh "su -c 'docker push ${ECR_REPO_URL}:${IMAGE_TAG}'"
+                    sh "docker build -t petclinic-local ."
+                    sh "docker tag petclinic-local:latest ${ECR_REPO_URL}:${IMAGE_TAG}"
+                    sh "docker push ${ECR_REPO_URL}:${IMAGE_TAG}"
                 }
             }
         }
@@ -50,7 +51,6 @@ stage('2. Build & Push to ECR') {
                     script {
                         def imageUri = "${ECR_REPO_URL}:${IMAGE_TAG}"
 
-                        // Task Def 관련 AWS CLI 명령은 apt-get 설치 후에는 sudo/su 없이 작동해야 합니다.
                         def taskDefJson = sh(
                             returnStdout: true, 
                             script: "aws ecs describe-task-definition --task-definition ${TASK_DEF_NAME}"

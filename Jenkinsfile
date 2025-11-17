@@ -27,18 +27,19 @@ pipeline {
 stage('2. Build & Push to ECR') {
             steps {
                 script {
-                    // **sudo**를 사용하여 루트 권한으로 실행
-                    sh "sudo apt-get update && sudo apt-get install -y docker.io awscli" 
+                    // 1. 필요한 도구 설치 (su -c로 root 권한 획득 후 설치)
+                    sh 'su -c "apt-get update && apt-get install -y docker.io awscli"'
                     
-                    // ECR 로그인부터 모든 쉘 명령에 sudo를 붙여야 합니다.
+                    // 2. AWS ECR 인증 및 Docker Login
                     withAWS(credentials: AWS_CRED_ID, region: AWS_REGION) {
-                        sh "sudo aws ecr get-login-password --region ${AWS_REGION} | sudo docker login --username AWS --password-stdin ${ECR_REPO_URL}"
+                        // docker login도 root 권한이 필요할 가능성이 높으므로 su -c 사용
+                        sh "su -c 'aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REPO_URL}'"
                     }
 
-                    sh "sudo docker build -t petclinic-local ."
-                    sh "sudo docker tag petclinic-local:latest ${ECR_REPO_URL}:${IMAGE_TAG}"
-
-                    sh "sudo docker push ${ECR_REPO_URL}:${IMAGE_TAG}"
+                    // 3. Docker Build, Tag, Push
+                    sh 'su -c "docker build -t petclinic-local ."'
+                    sh "su -c 'docker tag petclinic-local:latest ${ECR_REPO_URL}:${IMAGE_TAG}'"
+                    sh "su -c 'docker push ${ECR_REPO_URL}:${IMAGE_TAG}'"
                 }
             }
         }
@@ -49,23 +50,22 @@ stage('2. Build & Push to ECR') {
                     script {
                         def imageUri = "${ECR_REPO_URL}:${IMAGE_TAG}"
 
-                        // Task Def 관련 AWS CLI 명령에도 모두 sudo를 붙여야 합니다.
+                        // Task Def 관련 AWS CLI 명령은 apt-get 설치 후에는 sudo/su 없이 작동해야 합니다.
                         def taskDefJson = sh(
                             returnStdout: true, 
-                            script: "sudo aws ecs describe-task-definition --task-definition ${TASK_DEF_NAME}"
+                            script: "aws ecs describe-task-definition --task-definition ${TASK_DEF_NAME}"
                         )
                         def taskDef = readJSON text: taskDefJson
 
-                        // ... (중간 JSON 처리 로직은 그대로)
+                        // ... (중간 JSON 처리 로직 유지)
 
                         def newTaskDef = sh(
                             returnStdout: true, 
-                            // JSON 문자열 처리 때문에 이 줄은 길지만, sudo를 앞에 붙입니다.
-                            script: "sudo aws ecs register-task-definition --cli-input-json '${taskDef.taskDefinition.toString().replace("'", "\\'")}'"
+                            script: "aws ecs register-task-definition --cli-input-json '${taskDef.taskDefinition.toString().replace("'", "\\'")}'"
                         )
                         def newTaskDefArn = readJSON(text: newTaskDef).taskDefinition.taskDefinitionArn
 
-                        sh "sudo aws ecs update-service --cluster ${ECS_CLUSTER} --service ${ECS_SERVICE} --task-definition ${newTaskDefArn} --force-new-deployment"
+                        sh "aws ecs update-service --cluster ${ECS_CLUSTER} --service ${ECS_SERVICE} --task-definition ${newTaskDefArn} --force-new-deployment"
                     }
                 }
             }

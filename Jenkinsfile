@@ -59,23 +59,18 @@ pipeline {
                         taskDef.taskDefinition.remove('status')
                         taskDef.taskDefinition.remove('compatibilities')
                         
-taskDef.taskDefinition.remove('requiresAttributes')
+                        taskDef.taskDefinition.remove('requiresAttributes')
                         taskDef.taskDefinition.remove('revision')
                         taskDef.taskDefinition.remove('taskDefinitionArn')
                         
                         
                         def newTaskDef = sh(returnStdout: true, 
-                            script: "aws ecs register-task-definition 
---cli-input-json '${taskDef.taskDefinition.toString().replace("'", 
-"\\'")}'"
+                            script: "aws ecs register-task-definition --cli-input-json '${taskDef.taskDefinition.toString().replace("'", "\\'")}'"
                         )
-                        def newTaskDefArn = readJSON(text: 
-newTaskDef).taskDefinition.taskDefinitionArn
+                        def newTaskDefArn = readJSON(text: newTaskDef).taskDefinition.taskDefinitionArn
 
                        
-                        sh "aws ecs update-service --cluster 
-${ECS_CLUSTER} --service ${ECS_SERVICE} --task-definition ${newTaskDefArn} 
---force-new-deployment"
+                        sh "aws ecs update-service --cluster${ECS_CLUSTER} --service ${ECS_SERVICE} --task-definition ${newTaskDefArn} --force-new-deployment"
                     }
                 }
             }

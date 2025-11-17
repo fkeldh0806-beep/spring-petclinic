@@ -38,9 +38,7 @@ pipeline {
                     // 1. AWS ECR 인증 및 Docker Login
                     withAWS(credentials: AWS_CRED_ID, region: AWS_REGION) 
 {
-                        sh "aws ecr get-login-password --region 
-${AWS_REGION} | docker login --username AWS --password-stdin 
-${ECR_REPO_URL}"
+                        sh "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REPO_URL}"
                     }
 
                     // 2. Docker 이미지 빌드 및 태깅 (PetClinic의 

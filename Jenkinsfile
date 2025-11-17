@@ -18,6 +18,7 @@ pipeline {
     stages {
         stage('1. Checkout Code') {
             steps {
+                sh 'sudo apt-get update && sudo apt-get install -y jq'
                 git branch: 'main', 
                     credentialsId: 'github-ssh-key-for-checkout', 
                     url: 'git@github.com:fkeldh0806-beep/spring-petclinic.git' 

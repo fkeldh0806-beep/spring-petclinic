@@ -1,5 +1,5 @@
 # 사용할 자바 기본 이미지를 지정합니다. Spring Boot 애플리케이션에 적합합니다.
-FROM openjdk:17-jdk-slim as builder
+FROM openjdk:17-jdk-slim-buster as builder
 
 # 환경 변수 설정
 ENV SPRING_PROFILES_ACTIVE=mysql \
@@ -27,7 +27,7 @@ RUN ./mvnw package -DskipTests
 
 # -----------------
 # 실행 단계 (Jib 빌드가 아니므로 명시적 실행 환경 필요)
-FROM openjdk:17-jdk-slim
+FROM openjdk:17-jdk-slim-buster
 WORKDIR /app
 COPY --from=builder /app/target/*.jar app.jar
 EXPOSE 8080

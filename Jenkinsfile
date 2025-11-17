@@ -1,10 +1,5 @@
 pipeline {
- agent {
-        docker {
-            image 'jenkins/jnlp-slave-docker-awscli'
-            args '-u root' 
-        }
-    }
+ agent any
     
     environment {
         AWS_CRED_ID    = 'aws-iam-credentials'          
@@ -32,6 +27,10 @@ pipeline {
         stage('2. Build & Push to ECR') {
             steps {
                 script {
+
+                    // **새로 추가할 부분: 필요한 도구 설치**
+                    sh "apt-get update && apt-get install -y docker.io awscli"
+                    
                     withAWS(credentials: AWS_CRED_ID, region: AWS_REGION) {
                         sh "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REPO_URL}"
                     }

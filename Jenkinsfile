@@ -1,8 +1,8 @@
 pipeline {
-    agent {
+ agent {
         docker {
-            image 'jenkins/jnlp-slave-docker-awscli' // AWS CLI와 Docker가 설치된 이미지
-            args '-u root:root' // 컨테이너 내에서 권한 문제 회피
+            image 'jenkins/jnlp-slave-docker-awscli'
+            args '-u root' 
         }
     }
     

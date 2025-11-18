@@ -14,7 +14,7 @@ pipeline {
         
         IMAGE_TAG = "${env.BUILD_NUMBER}"
 
-	DB_HOST = 'petclinic-rds.cfk48kygcx25.ap-northeast-2.rds.amazonaws.com'
+	DB_HOST = 'petclinic-master.cfk48kygcx25.ap-northeast-2.rds.amazonaws.com'
     	DB_NAME = 'petclinic' 
     	DB_USER = 'postgres' 
     	DB_PASSWORD = 'zx1357zx99' 

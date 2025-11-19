@@ -7,6 +7,10 @@ pipeline {
         AWS_REGION     = 'ap-northeast-2'
         ECS_CLUSTER    = 'petclinic-cluster'
         IMAGE_TAG      = "${env.BUILD_NUMBER}"
+
+        // Blue/Green Target Group 정의
+        GREEN_TG_NAME = "${env.targetService}-tg-green"
+        BLUE_TG_NAME = "${env.targetService}-tg" // 기존 TG는 Blue로 간주
         
         // DB 연결 정보 (백엔드 서비스에서 사용)
         DB_HOST = 'petclinic-master.cfk48kygcx25.ap-northeast-2.rds.amazonaws.com' // 🚨 실제 Master 엔드포인트로 변경하세요
@@ -107,7 +111,48 @@ pipeline {
                         )
                         def newTaskDefArn = readJSON(text: newTaskDef).taskDefinition.taskDefinitionArn
 
-                        sh "aws ecs update-service --cluster ${env.ECS_CLUSTER} --service ${env.ECS_SERVICE} --task-definition ${newTaskDefArn} --force-new-deployment"
+                        // 🚨 3. 무중단 배포 (Blue/Green) 로직 시작
+
+                        // 3-1. 신규 Task Definition을 Green Target Group에 연결하여 배포
+                        sh "aws ecs update-service --cluster ${env.ECS_CLUSTER} --service ${env.ECS_SERVICE} --task-definition ${newTaskDefArn} --force-new-deployment --target-group ${env.GREEN_TG_NAME}"
+
+                        echo "INFO: Waiting for new tasks to become healthy in ${env.GREEN_TG_NAME}..."
+                        // 3-2. 신규 Task가 Healthy 상태가 될 때까지 기다림 (약 300초/5분)
+                        sh "aws ecs wait services-stable --cluster ${env.ECS_CLUSTER} --services ${env.ECS_SERVICE}"
+
+                        // 3-3. ALB 규칙 전환 (트래픽을 Green으로 이동)
+                        // ALB 리스너 ARN과 규칙 ARN을 찾아야 합니다. (이는 AWS 콘솔에서 수동으로 찾아야 함)
+                        // 편의를 위해 일단 임시 변수 처리하겠습니다. 실제 ARN으로 교체 필요.
+                        def ALB_LISTENER_ARN = 'arn:aws:elasticloadbalancing:ap-northeast-2:556152726180:loadbalancer/app/petclinic-alb/e465b04aacd23bb7' // 🚨 실제 ALB 리스너 ARN으로 교체
+                        def RULE_ARN_VETS = 'arn:aws:elasticloadbalancing:ap-northeast-2:556152726180:listener-rule/app/petclinic-alb/e465b04aacd23bb7/655379ee86faf010/cb5f7e43d4da34dc' // 🚨 back1 (Vets) 규칙 ARN으로 교체
+                        def RULE_ARN_OWNERS = 'arn:aws:elasticloadbalancing:ap-northeast-2:556152726180:listener-rule/app/petclinic-alb/e465b04aacd23bb7/655379ee86faf010/088710738448432a' // 🚨 back2 (Owners) 규칙 ARN으로 교체
+                        
+                        // 3-4. (front) Default 규칙 전환: front는 Default 규칙을 사용하며, Default 규칙의 Target Group을 Green으로 교체
+                        if (env.targetService == 'front') {
+                            sh """
+                                aws elbv2 modify-listener --listener-arn ${ALB_LISTENER_ARN} --default-actions '[{"Type": "forward", "TargetGroupArn": "${env.GREEN_TG_NAME}"}]'
+                                echo "INFO: Default Listener Rule (front-service) switched to ${env.GREEN_TG_NAME}"
+                            """
+                        }
+                        
+                        // 3-5. (back1/back2) Path 규칙 전환: Path 규칙의 Target Group을 Green으로 교체
+                        if (env.targetService == 'back1') {
+                            sh """
+                                aws elbv2 modify-listener-rule --rule-arn ${RULE_ARN_VETS} --actions '[{"Type": "forward", "TargetGroupArn": "${env.GREEN_TG_NAME}"}]'
+                                echo "INFO: Vets Path Rule (back1-service) switched to ${env.GREEN_TG_NAME}"
+                            """
+                        } else if (env.targetService == 'back2') {
+                            sh """
+                                aws elbv2 modify-listener-rule --rule-arn ${RULE_ARN_OWNERS} --actions '[{"Type": "forward", "TargetGroupArn": "${env.GREEN_TG_NAME}"}]'
+                                echo "INFO: Owners Path Rule (back2-service) switched to ${env.GREEN_TG_NAME}"
+                            """
+                        }
+
+                        // 3-6. 기존 Blue Target Group의 Task 제거 (선택적)
+                        echo "INFO: Cleaning up old tasks in Blue TG (${env.BLUE_TG_NAME})"
+                        // (ECS Task를 Blue TG에서 제거하는 AWS CLI 명령 추가 가능)
+                        
+                        echo "SUCCESS: Deployment completed via Blue/Green swap."
                     }
                 }
             }
